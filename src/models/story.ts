@@ -24,6 +24,22 @@ export interface StoryClue {
   payoffSceneId: string;
 }
 
+export interface StoryComment {
+  id: string;
+  author: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface StoryCommentThread {
+  id: string;
+  sceneId: string;
+  /** 最近一次所知的场景标题，仅在场景被删除后用于展示归档线程。 */
+  sceneTitle: string;
+  resolved: boolean;
+  comments: StoryComment[];
+}
+
 export interface StoryDocument {
   version: 1;
   id: string;
@@ -32,6 +48,7 @@ export interface StoryDocument {
   characters: StoryCharacter[];
   scenes: StoryScene[];
   clues: StoryClue[];
+  comments: StoryCommentThread[];
   selectedSceneId: string;
   updatedAt: string;
 }
@@ -41,6 +58,7 @@ export interface StoryStats {
   scenes: number;
   clues: number;
   unresolvedClues: number;
+  unresolvedComments: number;
   completion: number;
 }
 
@@ -89,6 +107,18 @@ export function createStarterStory(): StoryDocument {
         title: '潮汐表背后的日期',
         setupSceneId: oldHarborId,
         payoffSceneId: '',
+      },
+    ],
+    comments: [
+      {
+        id: 'thread-letter-timing',
+        sceneId: oldHarborId,
+        sceneTitle: '旧港口的来信',
+        resolved: false,
+        comments: [
+          { id: 'comment-editor-1', author: '编辑', body: '开篇节奏很好，但这封信为什么没有邮戳？建议补一个细节。', createdAt: '2026-09-21T09:12:00.000Z' },
+          { id: 'comment-author-1', author: '作者', body: '好主意，我让米拉在信纸上发现水渍和盐粒。', createdAt: '2026-09-21T10:05:00.000Z' },
+        ],
       },
     ],
     selectedSceneId: oldHarborId,

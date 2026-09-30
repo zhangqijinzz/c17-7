@@ -1,10 +1,21 @@
 import type { StoryCharacter, StoryScene } from '../models/story';
 import type { StoryViewModel } from '../viewmodels/storyViewModel';
+import { SceneComments } from './SceneComments';
 
 interface SceneInspectorProps { viewModel: StoryViewModel; scene: StoryScene | null; characters: StoryCharacter[]; }
 
 export function SceneInspector({ viewModel, scene, characters }: SceneInspectorProps) {
-  if (!scene) return <section className="panel inspector empty-inspector"><span className="eyebrow">INSPECTOR</span><h2>选择一个场景</h2><p>从时间线中选择一幕，开始补充人物、冲突和节奏。</p></section>;
+  if (!scene) {
+    const orphans = viewModel.orphanThreads;
+    return (
+      <section className="panel inspector empty-inspector">
+        <span className="eyebrow">INSPECTOR</span>
+        <h2>选择一个场景</h2>
+        <p>从时间线中选择一幕，开始补充人物、冲突和节奏。</p>
+        {orphans.length > 0 && <p className="archived-hint">另有 {orphans.length} 条未解决批注挂在已删除的场景上，可以在左侧待办里处理。</p>}
+      </section>
+    );
+  }
   const story = viewModel.snapshot.story;
   const index = story ? [...story.scenes].sort((a, b) => a.order - b.order).findIndex((item) => item.id === scene.id) : 0;
   return (
@@ -14,7 +25,8 @@ export function SceneInspector({ viewModel, scene, characters }: SceneInspectorP
       <label>这一幕发生了什么<textarea value={scene.summary} onChange={(event) => viewModel.updateScene(scene.id, { summary: event.target.value })} rows={3} /></label>
       <label>核心冲突<textarea value={scene.conflict} onChange={(event) => viewModel.updateScene(scene.id, { conflict: event.target.value })} rows={2} placeholder="是什么让人物无法轻易得到想要的东西？" /></label>
       <div className="field-block"><span className="field-label">出场人物</span><div className="person-toggles">{characters.map((character) => <button key={character.id} className={scene.characterIds.includes(character.id) ? `person-toggle selected ${character.color}` : 'person-toggle'} onClick={() => viewModel.toggleCharacter(scene.id, character.id)}><span>{character.name.slice(0, 1)}</span>{character.name}</button>)}</div></div>
-      <div className="order-controls"><span>时间顺序</span><button disabled={index <= 0} onClick={() => viewModel.moveScene(scene.id, 'up')}>↑ 上移</button><button disabled={index >= (story?.scenes.length ?? 1) - 1} onClick={() => viewModel.moveScene(scene.id, 'down')}>↓ 下移</button></div>
+      <div className="order-controls"><span>时间顺序</span><button disabled={index <= 0} onClick={() => viewModel.moveScene(scene.id, 'up')}>↑ 上移</button><button disabled={index >= (story?.scenes.length ?? 1) - 1} onClick={() => viewModel.moveScene(scene.id, 'down')}>↓ 下移</button><button className="delete-scene" onClick={() => { if (window.confirm(`删除场景「${scene.title}」？上面的批注会归档保留，不会丢失。`)) viewModel.deleteScene(scene.id); }}>删除场景</button></div>
+      <SceneComments viewModel={viewModel} sceneId={scene.id} threads={viewModel.threadsOf(scene.id)} />
     </section>
   );
 }
