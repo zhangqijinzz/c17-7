@@ -24,6 +24,26 @@ export interface StoryClue {
   payoffSceneId: string;
 }
 
+export type CommentAuthor = 'author' | 'editor';
+
+export interface CommentMessage {
+  id: string;
+  author: CommentAuthor;
+  body: string;
+  createdAt: string;
+}
+
+export interface SceneAnnotation {
+  id: string;
+  sceneId: string;
+  /** 场景标题的快照：场景改名后显示当前标题，场景被删后用它保留上下文 */
+  sceneTitle: string;
+  resolved: boolean;
+  messages: CommentMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface StoryDocument {
   version: 1;
   id: string;
@@ -32,6 +52,8 @@ export interface StoryDocument {
   characters: StoryCharacter[];
   scenes: StoryScene[];
   clues: StoryClue[];
+  /** 批注线程与场景通过稳定的 sceneId 绑定，不依赖顺序或标题；老项目里可能缺省，按空数组处理 */
+  annotations: SceneAnnotation[];
   selectedSceneId: string;
   updatedAt: string;
 }
@@ -41,6 +63,7 @@ export interface StoryStats {
   scenes: number;
   clues: number;
   unresolvedClues: number;
+  openAnnotations: number;
   completion: number;
 }
 
@@ -89,6 +112,31 @@ export function createStarterStory(): StoryDocument {
         title: '潮汐表背后的日期',
         setupSceneId: oldHarborId,
         payoffSceneId: '',
+      },
+    ],
+    annotations: [
+      {
+        id: 'annotation-harbor-date',
+        sceneId: oldHarborId,
+        sceneTitle: '旧港口的来信',
+        resolved: false,
+        messages: [
+          { id: 'message-harbor-date-1', author: 'editor', body: '潮汐表背面的日期建议在这一幕直接写出具体数字，读者后面才能回收。', createdAt: '2026-09-20T09:12:00.000Z' },
+          { id: 'message-harbor-date-2', author: 'author', body: '同意，我把日期定成十一月初三，和灯塔停电的日子呼应。', createdAt: '2026-09-20T10:05:00.000Z' },
+        ],
+        createdAt: '2026-09-20T09:12:00.000Z',
+        updatedAt: '2026-09-20T10:05:00.000Z',
+      },
+      {
+        id: 'annotation-storm-compass',
+        sceneId: 'scene-storm',
+        sceneTitle: '风暴前夜',
+        resolved: true,
+        messages: [
+          { id: 'message-storm-compass-1', author: 'editor', body: '罗盘的来历可以留一点悬念，不用在这里解释太多。', createdAt: '2026-09-21T14:30:00.000Z' },
+        ],
+        createdAt: '2026-09-21T14:30:00.000Z',
+        updatedAt: '2026-09-22T08:00:00.000Z',
       },
     ],
     selectedSceneId: oldHarborId,

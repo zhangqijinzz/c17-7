@@ -17,7 +17,9 @@ export function TimelineBoard({ viewModel, scenes }: TimelineBoardProps) {
         {scenes.map((scene, index) => {
           const selected = story?.selectedSceneId === scene.id;
           const characterCount = story?.characters.filter((character) => scene.characterIds.includes(character.id)).length ?? 0;
-          return <button className={selected ? 'scene-node selected' : 'scene-node'} key={scene.id} onClick={() => viewModel.selectScene(scene.id)}><span className="scene-index">{String(index + 1).padStart(2, '0')}</span><span className="scene-line" /><span className="scene-dot" /><div className="scene-copy"><span className="scene-meta">SCENE {String(index + 1).padStart(2, '0')} · {characterCount} 位人物</span><strong>{scene.title}</strong><span>{scene.summary}</span><div className="scene-tags">{scene.conflict && <em>冲突</em>}{scene.clueIds.length > 0 && <em className="clue-tag">伏笔 {scene.clueIds.length}</em>}</div></div></button>;
+          const sceneThreads = viewModel.annotationsOnScene(scene.id);
+          const openThreadCount = sceneThreads.filter((thread) => !thread.resolved).length;
+          return <button className={selected ? 'scene-node selected' : 'scene-node'} key={scene.id} id={`scene-node-${scene.id}`} onClick={() => viewModel.selectScene(scene.id)}><span className="scene-index">{String(index + 1).padStart(2, '0')}</span><span className="scene-line" /><span className="scene-dot" /><div className="scene-copy"><span className="scene-meta">SCENE {String(index + 1).padStart(2, '0')} · {characterCount} 位人物</span><strong>{scene.title}</strong><span>{scene.summary}</span><div className="scene-tags">{scene.conflict && <em>冲突</em>}{scene.clueIds.length > 0 && <em className="clue-tag">伏笔 {scene.clueIds.length}</em>}{openThreadCount > 0 && <em className="annotation-tag">批注 {openThreadCount}</em>}</div></div></button>;
         })}
         {scenes.length === 0 && <div className="empty-state">时间线还没有场景。创建第一幕，让故事开始移动。</div>}
       </div>

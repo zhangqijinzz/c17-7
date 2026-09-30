@@ -2,11 +2,22 @@ import {
   characterColors,
   createId,
   createStarterStory,
+  type CommentAuthor,
+  type SceneAnnotation,
   type StoryCharacter,
   type StoryClue,
   type StoryDocument,
   type StoryScene,
 } from '../models/story';
+import {
+  annotationsForScene,
+  createAnnotation,
+  createMessage,
+  findAnnotation,
+  isOrphan,
+  openAnnotations,
+  orphanAnnotations,
+} from '../models/annotations';
 import { getStats, getTimelineWarning, orderedScenes, validateName } from '../models/storyRules';
 import type { StoryRepository } from '../repositories/storyRepository';
 
@@ -28,7 +39,7 @@ export class StoryViewModel {
   private state: StoryViewState = {
     status: 'loading',
     story: null,
-    stats: { characters: 0, scenes: 0, clues: 0, unresolvedClues: 0, completion: 0 },
+    stats: { characters: 0, scenes: 0, clues: 0, unresolvedClues: 0, openAnnotations: 0, completion: 0 },
     notice: '',
     error: '',
     search: '',
@@ -109,7 +120,33 @@ export class StoryViewModel {
     this.updateStory((story) => ({
       ...story,
       scenes: story.scenes.map((scene) => (scene.id === sceneId ? { ...scene, ...patch } : scene)),
+      // 改名时同步批注上的标题快照；绑定关系始终靠 sceneId，不靠标题
+      annotations: patch.title
+        ? story.annotations.map((annotation) => (annotation.sceneId === sceneId ? { ...annotation, sceneTitle: patch.title as string } : annotation))
+        : story.annotations,
     }), false);
+  }
+
+  deleteScene(sceneId: string): void {
+    const target = this.requireStory().scenes.find((scene) => scene.id === sceneId);
+    if (!target) return;
+    const linkedAnnotations = this.requireStory().annotations.filter((annotation) => annotation.sceneId === sceneId).length;
+    this.updateStory((story) => {
+      const remaining = orderedScenes(story)
+        .filter((scene) => scene.id !== sceneId)
+        .map((scene, index) => ({ ...scene, order: index + 1 }));
+      return {
+        ...story,
+        scenes: remaining,
+        selectedSceneId: story.selectedSceneId === sceneId ? remaining[0]?.id ?? '' : story.selectedSceneId,
+      };
+    });
+    // 批注不随场景删除：它们以孤儿线程保留在侧边栏待办里，任何时候都能找回
+    this.setState({
+      notice: linkedAnnotations > 0
+        ? `场景「${target.title}」已删除，${linkedAnnotations} 条批注保留在侧边栏待办中，不会丢失。`
+        : `场景「${target.title}」已删除。`,
+    });
   }
 
   toggleCharacter(sceneId: string, characterId: string): void {
@@ -129,6 +166,7 @@ export class StoryViewModel {
     const nextIndex = direction === 'up' ? index - 1 : index + 1;
     if (index < 0 || nextIndex < 0 || nextIndex >= scenes.length) return;
     [scenes[index], scenes[nextIndex]] = [scenes[nextIndex], scenes[index]];
+    // 只动 order：批注按 sceneId 绑定，重排后自然跟着场景走，无需改动批注
     this.updateStory((story) => ({ ...story, scenes: scenes.map((scene, sceneIndex) => ({ ...scene, order: sceneIndex + 1 })) }));
     this.setState({ notice: '时间线顺序已更新' });
   }
@@ -152,9 +190,80 @@ export class StoryViewModel {
     this.setState({ notice: payoffSceneId ? '伏笔关系已建立' : '伏笔已记录，等待回收' });
   }
 
+  addAnnotation(sceneId: string, body: string, author: CommentAuthor): void {
+    const content = body.trim();
+    if (content.length < 2) {
+      this.setState({ notice: '批注至少写 2 个字' });
+      return;
+    }
+    const scene = this.requireStory().scenes.find((item) => item.id === sceneId);
+    if (!scene) {
+      this.setState({ notice: '场景不存在，批注无法挂载' });
+      return;
+    }
+    const annotation = createAnnotation(sceneId, scene.title, author, content);
+    this.updateStory((story) => ({ ...story, annotations: [...story.annotations, annotation] }));
+    this.setState({ notice: '批注已挂到场景上' });
+  }
+
+  replyToAnnotation(annotationId: string, body: string, author: CommentAuthor): void {
+    const content = body.trim();
+    if (content.length < 2) {
+      this.setState({ notice: '回复至少写 2 个字' });
+      return;
+    }
+    const now = new Date().toISOString();
+    this.updateStory((story) => ({
+      ...story,
+      annotations: story.annotations.map((annotation) =>
+        annotation.id === annotationId && !annotation.resolved
+          ? { ...annotation, messages: [...annotation.messages, createMessage(author, content, now)], updatedAt: now }
+          : annotation,
+      ),
+    }));
+  }
+
+  resolveAnnotation(annotationId: string): void {
+    const now = new Date().toISOString();
+    this.updateStory((story) => ({
+      ...story,
+      annotations: story.annotations.map((annotation) =>
+        annotation.id === annotationId ? { ...annotation, resolved: true, updatedAt: now } : annotation,
+      ),
+    }));
+    this.setState({ notice: '批注已标记为解决' });
+  }
+
+  reopenAnnotation(annotationId: string): void {
+    const now = new Date().toISOString();
+    this.updateStory((story) => ({
+      ...story,
+      annotations: story.annotations.map((annotation) =>
+        annotation.id === annotationId ? { ...annotation, resolved: false, updatedAt: now } : annotation,
+      ),
+    }));
+    this.setState({ notice: '批注已重新打开' });
+  }
+
+  /** 侧边栏待办点击：跳转到批注所在场景；场景已删除时不跳转 */
+  focusAnnotation(annotationId: string): boolean {
+    const story = this.requireStory();
+    const annotation = findAnnotation(story, annotationId);
+    if (!annotation || isOrphan(annotation, story)) return false;
+    this.selectScene(annotation.sceneId);
+    return true;
+  }
+
   completeProject(): void {
+    const openCount = this.requireStory().annotations.filter((annotation) => !annotation.resolved).length;
     this.updateStory((story) => ({ ...story, status: 'complete' }));
-    this.setState({ status: 'completed', notice: '项目已标记为完成，仍可继续编辑' });
+    // 有未解决批注只做明确提示，绝不阻断收尾
+    this.setState({
+      status: 'completed',
+      notice: openCount > 0
+        ? `还有 ${openCount} 条批注未解决，项目仍已标记完成；可随时回来处理，不必现在解决。`
+        : '项目已标记为完成，仍可继续编辑',
+    });
   }
 
   resetProject(): void {
@@ -183,6 +292,18 @@ export class StoryViewModel {
   get timelineWarning(): string | null {
     const story = this.state.story;
     return story ? getTimelineWarning(story) : null;
+  }
+
+  get openAnnotationThreads(): SceneAnnotation[] {
+    return this.state.story ? openAnnotations(this.state.story) : [];
+  }
+
+  get orphanAnnotationThreads(): SceneAnnotation[] {
+    return this.state.story ? orphanAnnotations(this.state.story) : [];
+  }
+
+  annotationsOnScene(sceneId: string): SceneAnnotation[] {
+    return this.state.story ? annotationsForScene(this.state.story, sceneId) : [];
   }
 
   private requireStory(): StoryDocument {

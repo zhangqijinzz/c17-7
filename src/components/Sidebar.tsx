@@ -1,3 +1,4 @@
+import { AnnotationTodos } from './AnnotationTodos';
 import type { StoryStats } from '../models/story';
 import type { StoryViewModel } from '../viewmodels/storyViewModel';
 
@@ -17,6 +18,7 @@ export function Sidebar({ viewModel, stats }: SidebarProps) {
         <button className={activeSection === 'characters' ? 'nav-item active' : 'nav-item'} onClick={() => viewModel.setSection('characters')}><span>♧</span>人物关系</button>
         <button className={activeSection === 'clues' ? 'nav-item active' : 'nav-item'} onClick={() => viewModel.setSection('clues')}><span>⌁</span>伏笔关系</button>
       </nav>
+      <AnnotationTodos viewModel={viewModel} />
       <div className="sidebar-bottom">
         <div className="mini-progress"><div><span>结构完成度</span><b>{stats.completion}%</b></div><div className="progress-track"><span style={{ width: `${stats.completion}%` }} /></div></div>
         <button className="reset-link" onClick={() => viewModel.resetProject()}>↻ 恢复示例项目</button>
